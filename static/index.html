@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#6c5ce7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Claude Code Notifications</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/static/icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icon-192.svg">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Claude Code Notifications</h1>
+    <p class="subtitle">Push notifications for task completion, permissions & idle prompts</p>
+
+    <div id="ios-instructions" class="ios-instructions" style="display: none;">
+      <strong>iOS Setup Required</strong><br>
+      To receive push notifications on iOS, you need to install this as an app first:<br>
+      1. Tap the <strong>Share</strong> button<br>
+      2. Select <strong>"Add to Home Screen"</strong><br>
+      3. Open the app from your home screen<br>
+      4. Then enable notifications
+    </div>
+
+    <div class="card">
+      <div class="status">
+        <div id="status-dot" class="status-dot"></div>
+        <div id="status-text" class="status-text">Checking...</div>
+      </div>
+      <button id="subscribe-btn" class="primary">Enable Notifications</button>
+      <button id="test-btn" style="display: none;">Send Test Notification</button>
+    </div>
+
+    <div class="card">
+      <h2>Recent Notifications</h2>
+      <ul id="notification-list" class="notification-list">
+        <li class="empty">Loading...</li>
+      </ul>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

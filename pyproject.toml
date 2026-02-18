@@ -1,0 +1,18 @@
+[project]
+name = "notify-test"
+version = "0.1.0"
+description = "Claude Code Push Notification PWA"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pywebpush",
+    "python-dotenv",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["server"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
