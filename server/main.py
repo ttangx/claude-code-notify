@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -147,6 +148,107 @@ async def test_notify():
 @app.get("/api/notifications")
 async def notifications():
     return store.get_notifications()
+
+
+# --- Session management ---
+
+VALID_SESSION_NAME = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+@app.get("/api/directories")
+async def directories():
+    return store.get_directories()
+
+
+@app.get("/api/sessions")
+async def list_sessions():
+    try:
+        result = subprocess.run(
+            ["tmux", "list-sessions", "-F", "#{session_name}|#{session_created}|#{session_path}|#{session_windows}"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except FileNotFoundError:
+        raise HTTPException(500, "tmux not found on server")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(500, "tmux timed out")
+
+    if result.returncode != 0:
+        # No sessions running returns exit code 1
+        return []
+
+    sessions = []
+    for line in result.stdout.strip().splitlines():
+        parts = line.split("|", 3)
+        if len(parts) == 4:
+            sessions.append({
+                "name": parts[0],
+                "created": int(parts[1]) if parts[1].isdigit() else 0,
+                "path": parts[2],
+                "windows": int(parts[3]) if parts[3].isdigit() else 1,
+            })
+    return sessions
+
+
+@app.post("/api/sessions")
+async def create_session(request: Request):
+    body = await request.json()
+    path = body.get("path", "")
+
+    if not path:
+        raise HTTPException(400, "Missing path")
+
+    # Validate path is in the configured directories
+    dirs = store.get_directories()
+    allowed_paths = {d["path"] for d in dirs}
+    if path not in allowed_paths:
+        raise HTTPException(403, "Path not in configured directories")
+
+    target = Path(path)
+    if not target.is_dir():
+        raise HTTPException(400, "Path does not exist or is not a directory")
+
+    name = target.name
+    if not VALID_SESSION_NAME.match(name):
+        raise HTTPException(400, "Directory name contains invalid characters for a tmux session name")
+
+    try:
+        # Strip CLAUDECODE env var so claude doesn't think it's nested
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+        subprocess.run(
+            ["tmux", "new-session", "-d", "-s", name, "-c", str(target)],
+            check=True, capture_output=True, timeout=5, env=env,
+        )
+        subprocess.run(
+            ["tmux", "send-keys", "-t", name, "claude", "Enter"],
+            check=True, capture_output=True, timeout=5,
+        )
+    except FileNotFoundError:
+        raise HTTPException(500, "tmux not found on server")
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(500, f"tmux error: {e.stderr.decode()}")
+
+    return {"ok": True, "name": name, "path": str(target)}
+
+
+@app.post("/api/sessions/kill")
+async def kill_session(request: Request):
+    body = await request.json()
+    name = body.get("name", "")
+
+    if not name or not VALID_SESSION_NAME.match(name):
+        raise HTTPException(400, "Invalid session name")
+
+    try:
+        subprocess.run(
+            ["tmux", "kill-session", "-t", name],
+            check=True, capture_output=True, timeout=5,
+        )
+    except FileNotFoundError:
+        raise HTTPException(500, "tmux not found on server")
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(500, f"tmux error: {e.stderr.decode()}")
+
+    return {"ok": True, "killed": name}
 
 
 # Static files (CSS, JS, etc.) — mounted last so API routes take priority

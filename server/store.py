@@ -7,7 +7,12 @@ from threading import Lock
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SUBS_FILE = DATA_DIR / "subscriptions.json"
 HISTORY_FILE = DATA_DIR / "notifications.json"
+DIRS_FILE = DATA_DIR / "directories.json"
 MAX_HISTORY = 100
+
+DEFAULT_DIRECTORIES = [
+    {"name": "compare_books", "path": "/Users/tom/Development/compare_books"}
+]
 
 _lock = Lock()
 
@@ -91,3 +96,12 @@ def get_notifications(limit: int = 50) -> list[dict]:
     with _lock:
         history = _read_json(HISTORY_FILE)
         return history[:limit]
+
+
+def get_directories() -> list[dict]:
+    _ensure_data_dir()
+    with _lock:
+        if not DIRS_FILE.exists():
+            _write_json(DIRS_FILE, DEFAULT_DIRECTORIES)
+            return list(DEFAULT_DIRECTORIES)
+        return _read_json(DIRS_FILE)

@@ -24,28 +24,52 @@ INPUT=$(cat)
 EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty')
+NOTIFICATION_TYPE=$(echo "$INPUT" | jq -r '.notification_type // empty')
 
 # Extract project name from cwd
 PROJECT=$(basename "${CWD:-unknown}")
 
+# Extract context from transcript (last assistant message with tool use or text)
+CONTEXT=""
+if [[ -n "$TRANSCRIPT" && -f "$TRANSCRIPT" ]]; then
+  # Get the last few lines and extract the most recent tool call or assistant text
+  CONTEXT=$(tail -20 "$TRANSCRIPT" | jq -r '
+    select(.type == "assistant") |
+    .message.content[]? |
+    if .type == "tool_use" then
+      "Tool: \(.name)\(.input | if .command then " — \(.command)" elif .file_path then " — \(.file_path)" elif .pattern then " — \(.pattern)" else "" end)"
+    elif .type == "text" then
+      .text
+    else empty end
+  ' 2>/dev/null | tail -3 | head -c 500 || true)
+fi
+
 # Build title and message based on event type
 case "$EVENT" in
   Stop)
-    TITLE="Claude Code - $PROJECT"
-    MESSAGE="Task completed"
-    ;;
-  Notification)
-    # Notification events have a title and message in the hook data
-    TITLE=$(echo "$INPUT" | jq -r '.title // "Claude Code"')
-    MESSAGE=$(echo "$INPUT" | jq -r '.message // ""')
-    # If title is generic, prepend project name
-    if [[ "$TITLE" == "Claude Code" ]]; then
-      TITLE="Claude Code - $PROJECT"
+    TITLE="$PROJECT — Done"
+    # Try to get the last assistant text as a summary
+    if [[ -n "$CONTEXT" ]]; then
+      MESSAGE="$CONTEXT"
+    else
+      MESSAGE="Task completed"
     fi
     ;;
+  Notification)
+    TITLE=$(echo "$INPUT" | jq -r '.title // "Claude Code"')
+    MESSAGE=$(echo "$INPUT" | jq -r '.message // ""')
+    # Append context for permission prompts
+    if [[ "$NOTIFICATION_TYPE" == "permission_prompt" && -n "$CONTEXT" ]]; then
+      MESSAGE="${MESSAGE}
+${CONTEXT}"
+    fi
+    # Prepend project name
+    TITLE="$PROJECT — $TITLE"
+    ;;
   *)
-    TITLE="Claude Code - $PROJECT"
-    MESSAGE="Event: $EVENT"
+    TITLE="$PROJECT — $EVENT"
+    MESSAGE="${CONTEXT:-Event: $EVENT}"
     ;;
 esac
 
